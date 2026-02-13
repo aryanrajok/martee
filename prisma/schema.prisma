@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id                    String   @id @default(cuid())
+  walletAddress         String   @unique
+  name                  String   @default("Unnamed Merchant")
+  email                 String?
+  apiKey                String   @unique @db.Char(16)
+  wooCommerceEnabled    Boolean  @default(false)
+  wooCommerceSiteURL    String?
+  shopifyAccessToken    String?
+  shopifyShopDomain     String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@map("merchants")
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  status            OrderStatus @default(PENDING)
+  totalAmount       Float
+  currency          String      @default("KRW")
+  networkFee        Float       @default(0.02)
+  customerEmail     String?
+  customerWallet    String?
+  paymentMethod     String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  paidAt            DateTime?
+  expiresAt         DateTime?   // When the invoice expires (for DIRECT invoices)
+  approveHash       String?
+  blockNumber       Int?
+  fromAddress       String?
+  gasUsed           String?
+  merchantName      String
+  productName       String
+  toAddress         String?
+  tokenAddress      String?
+  transferHash      String?
+  refundTransferHash String?    // Transaction hash for refund
+  refundedAt        DateTime?   // Date when refund was processed
+  type              OrderType   @default(DIRECT)
+  orderConfirmation String?
+  adminGraphqlApiId String?
+  shopDomain        String?
+  merchantWallet    String?     // Add merchant wallet for direct invoices
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  EXPIRED
+}
+
+enum OrderType {
+  DIRECT
+  SHOPIFY
+  WOOCOMMERCE
+}

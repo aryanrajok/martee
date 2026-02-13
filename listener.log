@@ -1,0 +1,32 @@
+(node:24745) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24745) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/rizwan/Documents/Projects/mnee/wongateway/services/blockchain-listener.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/rizwan/Documents/Projects/mnee/wongateway/package.json.
+================================================================================
+🚀 Starting MNEE Blockchain Listener Service
+================================================================================
+Network: sepolia
+Token: 0x21dbe1B2FA0068628df10799824eF366A0985416
+Min Confirmations: 1
+RPC: wss://eth-sepolia.g.alchemy.com/v2/***
+================================================================================
+✅ Connected to network: sepolia (chainId: 11155111)
+✅ Token: tMNEE (18 decimals)
+✅ Listener active - monitoring for MNEE transfers...
+
+
+================================================================================
+🔔 New Transfer Event Detected
+================================================================================
+From: 0xAF4F74e3F729f7F7Dd2c5588Bd63310e9d089D45
+To: 0x91dD73e5Df716C16916dfBE414271fd35B5a2652
+Amount: 204.9 tMNEE
+Tx Hash: undefined
+Block: undefined
+[Matcher] Matched transfer to order wc_order_pqt8TDpuVul3M
+✅ Matched to order: wc_order_pqt8TDpuVul3M
+⏳ Waiting for 1 confirmations...
+⏳ Only NaN/1 confirmations, waiting...
+================================================================================
+

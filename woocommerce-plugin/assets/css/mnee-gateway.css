@@ -1,0 +1,125 @@
+.wc-MNEE-gateway-form {
+    margin-top: 20px;
+}
+
+/* Make MNEE Stablecoin label more prominent */
+input[type="radio"][value="MNEE_gateway"] + label {
+    font-size: 18px !important;
+    font-weight: bold !important;
+    color: #1a1a1a !important;
+}
+
+/* Alternative selector for different themes */
+label[for="payment_method_MNEE_gateway"] {
+    font-size: 18px !important;
+    font-weight: bold !important;
+    color: #1a1a1a !important;
+}
+
+#wc-MNEE_gateway-form fieldset {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+#wc-MNEE_gateway-form label {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 8px;
+}
+
+#wc-MNEE_gateway-form input[type="text"],
+#wc-MNEE_gateway-form input[type="tel"],
+#wc-MNEE_gateway-form select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+#wc-MNEE_gateway-form input[type="text"]:focus,
+#wc-MNEE_gateway-form input[type="tel"]:focus,
+#wc-MNEE_gateway-form select:focus {
+    border-color: #5b9dd9;
+    outline: none;
+    box-shadow: 0 0 0 1px #5b9dd9;
+}
+
+#MNEE-send-auth-code {
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: #0073aa;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.3s;
+}
+
+#MNEE-send-auth-code:hover:not(:disabled) {
+    background: #005a87;
+}
+
+#MNEE-send-auth-code:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.MNEE-gateway-test-mode {
+    background: #fcf8e3;
+    border: 1px solid #faebcc;
+    color: #8a6d3b;
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.MNEE-gateway-test-mode strong {
+    text-transform: uppercase;
+}
+
+.MNEE-gateway-icon {
+    display: inline-block;
+    width: 40px;
+    height: 25px;
+    margin-right: 10px;
+    vertical-align: middle;
+    background: url('../images/MNEE-icon.png') no-repeat center;
+    background-size: contain;
+}
+
+.MNEE-bank-logos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.MNEE-bank-logo {
+    width: 60px;
+    height: 30px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 5px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    #wc-MNEE_gateway-form fieldset {
+        padding: 15px;
+    }
+    
+    #MNEE-send-auth-code {
+        width: 100%;
+        margin-top: 15px;
+    }
+}

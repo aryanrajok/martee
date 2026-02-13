@@ -1,0 +1,28 @@
+<!-- Add this to Shopify Theme: Settings > Checkout > Order status page > Additional scripts -->
+
+{% if checkout.transactions.first.gateway == "MNEE Token Payment" %}
+<div id="mnee-payment-section" style="margin: 20px 0; padding: 20px; background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px;">
+  <h3 style="color: #1e40af; margin-top: 0;">Complete Your MNEE Payment</h3>
+  <p style="color: #1e3a8a;">Your order has been created. Please complete the payment using MNEE tokens.</p>
+  <a 
+    id="mnee-payment-link" 
+    href="https://cartee-dashboard.vercel.app/pay?orderId={{ checkout.order_id }}"
+    target="_blank"
+    style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;"
+  >
+    Pay with MNEE Token →
+  </a>
+  <p style="margin-top: 15px; font-size: 14px; color: #64748b;">
+    Order ID: {{ checkout.order_id }}<br>
+    Amount: {{ checkout.total_price | money }}
+  </p>
+</div>
+
+<script>
+// Automatically open payment page
+window.addEventListener('load', function() {
+  // Optional: Auto-open payment in new tab
+  // document.getElementById('mnee-payment-link').click();
+});
+</script>
+{% endif %}

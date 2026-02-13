@@ -1,0 +1,19 @@
+[Unit]
+Description=MNEE Blockchain Listener Service
+After=network.target
+
+[Service]
+Type=simple
+User=nodeuser
+WorkingDirectory=/opt/mnee-gateway
+Environment="NODE_ENV=production"
+EnvironmentFile=/opt/mnee-gateway/.env
+ExecStart=/usr/bin/node /opt/mnee-gateway/services/start-listener.js
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=mnee-listener
+
+[Install]
+WantedBy=multi-user.target

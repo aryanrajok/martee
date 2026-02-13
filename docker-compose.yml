@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: mnee-postgres
+    environment:
+      POSTGRES_USER: mnee
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: mnee_payments
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mnee-network
+
+  # Next.js Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mnee-web
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://mnee:changeme@postgres:5432/mnee_payments
+      ETHEREUM_RPC_WSS: ${ETHEREUM_RPC_WSS}
+      ETHEREUM_RPC_HTTP: ${ETHEREUM_RPC_HTTP}
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+      MNEE_TOKEN_ADDRESS: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"
+    depends_on:
+      - postgres
+    networks:
+      - mnee-network
+
+  # Blockchain Listener Service
+  listener:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: mnee-listener
+    environment:
+      DATABASE_URL: postgresql://mnee:changeme@postgres:5432/mnee_payments
+      ETHEREUM_RPC_WSS: ${ETHEREUM_RPC_WSS}
+      MNEE_TOKEN_ADDRESS: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"
+      MIN_CONFIRMATIONS: "3"
+      NETWORK_NAME: "ethereum"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - mnee-network
+
+volumes:
+  postgres_data:
+
+networks:
+  mnee-network:
+    driver: bridge
