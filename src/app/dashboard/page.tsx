@@ -40,6 +40,8 @@ interface Merchant {
   apiKey: string;
   wooCommerceEnabled?: boolean;
   wooCommerceSiteURL?: string;
+  shopifyAccessToken?: string;
+  shopifyShopDomain?: string;
 }
 
 interface IntegrationHealth {
@@ -62,6 +64,7 @@ export default function MerchantDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [regeneratingKey, setRegeneratingKey] = useState(false);
   const [showShopifyApiKey, setShowShopifyApiKey] = useState(false);
   const [integrationHealth, setIntegrationHealth] = useState<{
     shopify: IntegrationHealth;
@@ -69,15 +72,15 @@ export default function MerchantDashboard() {
   } | null>(null);
 
   // Refund transaction hooks
-  const { 
+  const {
     data: refundTxHash,
     writeContract: writeRefund,
     isPending: isRefunding
   } = useWriteContract();
 
   // Wait for refund transaction confirmation
-  const { isLoading: isRefundConfirming, isSuccess: isRefundConfirmed } = 
-    useWaitForTransactionReceipt({ 
+  const { isLoading: isRefundConfirming, isSuccess: isRefundConfirmed } =
+    useWaitForTransactionReceipt({
       hash: refundTxHash
     });
 
@@ -86,7 +89,7 @@ export default function MerchantDashboard() {
     address: address,
     token: MNEE_TOKEN_ADDRESS,
   });
-  
+
   // Form state for new invoice
   const [formData, setFormData] = useState({
     productName: '',
@@ -97,7 +100,7 @@ export default function MerchantDashboard() {
     expiresInHours: '24',
     type: 'DIRECT'
   });
-  
+
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
 
   const openInvoiceDetails = (invoice: Invoice) => {
@@ -112,7 +115,7 @@ export default function MerchantDashboard() {
 
   const fetchMerchantData = useCallback(async () => {
     if (!address) return;
-    
+
     setLoading(true);
     try {
       // Get or create merchant (always use lowercase)
@@ -121,12 +124,12 @@ export default function MerchantDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address.toLowerCase() })
       });
-      
+
       if (merchantRes.ok) {
         const merchantData = await merchantRes.json();
         console.log('Frontend received merchant data:', merchantData);
         setMerchant(merchantData);
-        
+
         // Fetch merchant's invoices (use lowercase)
         const invoicesRes = await fetch(`/api/merchants/invoices?wallet=${address.toLowerCase()}`);
         if (invoicesRes.ok) {
@@ -144,7 +147,7 @@ export default function MerchantDashboard() {
 
   const fetchIntegrationHealth = async () => {
     if (!address) return;
-    
+
     try {
       const response = await fetch(`/api/health/integrations?wallet=${address.toLowerCase()}`);
       if (response.ok) {
@@ -158,7 +161,7 @@ export default function MerchantDashboard() {
 
   const refreshInvoices = async () => {
     if (!address) return;
-    
+
     setRefreshing(true);
     try {
       const invoicesRes = await fetch(`/api/merchants/invoices?wallet=${address.toLowerCase()}`);
@@ -174,7 +177,31 @@ export default function MerchantDashboard() {
     }
   };
 
-  // Fetch or create merchant account
+  const regenerateApiKey = async () => {
+    if (!window.confirm('⚠️ This will invalidate your current API key. You will need to update it in your WooCommerce plugin settings. Continue?')) return;
+    setRegeneratingKey(true);
+    try {
+      const res = await fetch('/api/merchants/regenerate-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress: address }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMerchant(prev => prev ? { ...prev, apiKey: data.apiKey } : prev);
+        setShowApiKey(true);
+        alert('✅ New API key generated! Copy it and update your WooCommerce plugin settings.');
+      } else {
+        alert('Failed to regenerate API key. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error regenerating API key:', error);
+      alert('An error occurred. Please try again.');
+    } finally {
+      setRegeneratingKey(false);
+    }
+  };
+
   useEffect(() => {
     if (isConnected && address) {
       fetchMerchantData();
@@ -190,11 +217,11 @@ export default function MerchantDashboard() {
   // Handle refund transaction confirmation
   useEffect(() => {
     if (isRefundConfirmed && refundTxHash && selectedInvoice) {
-      console.log('Refund confirmed, updating database:', { 
-        orderId: selectedInvoice.id, 
-        refundTxHash 
+      console.log('Refund confirmed, updating database:', {
+        orderId: selectedInvoice.id,
+        refundTxHash
       });
-      
+
       // Update order status in database
       fetch('/api/orders/refund', {
         method: 'POST',
@@ -204,26 +231,26 @@ export default function MerchantDashboard() {
           refundTransferHash: refundTxHash
         })
       })
-      .then(res => res.json())
-      .then(data => {
-        console.log('Refund API response:', data);
-        alert('Refund processed successfully!');
-        refreshInvoices();
-        closeDetailsModal();
-        setIsProcessingRefund(false);
-      })
-      .catch(error => {
-        console.error('Failed to update refund status:', error);
-        alert('Refund transaction successful but failed to update status');
-        setIsProcessingRefund(false);
-      });
+        .then(res => res.json())
+        .then(data => {
+          console.log('Refund API response:', data);
+          alert('Refund processed successfully!');
+          refreshInvoices();
+          closeDetailsModal();
+          setIsProcessingRefund(false);
+        })
+        .catch(error => {
+          console.error('Failed to update refund status:', error);
+          alert('Refund transaction successful but failed to update status');
+          setIsProcessingRefund(false);
+        });
     }
   }, [isRefundConfirmed, refundTxHash, selectedInvoice, refreshInvoices, closeDetailsModal]);
 
   const createInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Create invoice clicked', { address, formData });
-    
+
     if (!address) {
       console.error('No wallet address available');
       return;
@@ -233,7 +260,7 @@ export default function MerchantDashboard() {
       console.log('Sending request to create invoice...');
       const res = await fetch('/api/merchants/invoices', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'X-API-Key': merchant?.apiKey || ''
         },
@@ -241,12 +268,13 @@ export default function MerchantDashboard() {
           ...formData,
           totalAmount: parseFloat(formData.totalAmount),
           type: formData.type,
-          expiresInHours: parseInt(formData.expiresInHours)
+          expiresInHours: parseInt(formData.expiresInHours),
+          _merchantWallet: address?.toLowerCase() // Add merchant wallet as fallback
         })
       });
 
       console.log('Response status:', res.status);
-      
+
       if (res.ok) {
         const newInvoice = await res.json();
         console.log('Invoice created successfully:', newInvoice);
@@ -426,9 +454,8 @@ export default function MerchantDashboard() {
                   <nav className="space-y-2">
                     <button
                       onClick={() => setActiveFilter('all')}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activeFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${activeFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <Home className="w-4 h-4" />
                       <span>Home</span>
@@ -438,9 +465,8 @@ export default function MerchantDashboard() {
                     </button>
                     <button
                       onClick={() => setActiveFilter('direct')}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activeFilter === 'direct' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${activeFilter === 'direct' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <FileText className="w-4 h-4" />
                       <span>Direct Invoices</span>
@@ -450,9 +476,8 @@ export default function MerchantDashboard() {
                     </button>
                     <button
                       onClick={() => setActiveFilter('shopify')}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activeFilter === 'shopify' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${activeFilter === 'shopify' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <ShoppingBag className="w-4 h-4" />
                       <span>Shopify</span>
@@ -462,9 +487,8 @@ export default function MerchantDashboard() {
                     </button>
                     <button
                       onClick={() => setActiveFilter('woocommerce')}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activeFilter === 'woocommerce' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${activeFilter === 'woocommerce' ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <Store className="w-4 h-4" />
                       <span>WooCommerce</span>
@@ -483,9 +507,8 @@ export default function MerchantDashboard() {
                   <nav className="space-y-2">
                     <button
                       onClick={() => setActiveFilter('pending')}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activeFilter === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${activeFilter === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <Clock className="w-4 h-4" />
                       <span>Pending</span>
@@ -495,9 +518,8 @@ export default function MerchantDashboard() {
                     </button>
                     <button
                       onClick={() => setActiveFilter('paid')}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activeFilter === 'paid' ? 'bg-green-100 text-green-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${activeFilter === 'paid' ? 'bg-green-100 text-green-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <CheckCircle className="w-4 h-4" />
                       <span>Paid</span>
@@ -507,9 +529,8 @@ export default function MerchantDashboard() {
                     </button>
                     <button
                       onClick={() => setActiveFilter('refunded')}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                        activeFilter === 'refunded' ? 'bg-purple-100 text-purple-700' : 'text-gray-700 hover:bg-gray-100'
-                      }`}
+                      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-sm transition-colors ${activeFilter === 'refunded' ? 'bg-purple-100 text-purple-700' : 'text-gray-700 hover:bg-gray-100'
+                        }`}
                     >
                       <RefreshCw className="w-4 h-4" />
                       <span>Refunded</span>
@@ -622,19 +643,17 @@ export default function MerchantDashboard() {
                     <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-l-green-500">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center space-x-3">
-                          <ShoppingBag className={`w-6 h-6 ${
-                            merchant?.shopifyAccessToken && integrationHealth?.shopify?.connected ? 'text-green-600' : 'text-gray-400'
-                          }`} />
+                          <ShoppingBag className={`w-6 h-6 ${merchant?.shopifyAccessToken && integrationHealth?.shopify?.connected ? 'text-green-600' : 'text-gray-400'
+                            }`} />
                           <div>
                             <h3 className="font-semibold text-gray-900">Shopify Integration</h3>
-                            <p className={`text-sm ${
-                              merchant?.shopifyAccessToken 
-                                ? (integrationHealth?.shopify?.connected ? 'text-green-600' : 'text-gray-500')
-                                : 'text-gray-500'
-                            }`}>
+                            <p className={`text-sm ${merchant?.shopifyAccessToken
+                              ? (integrationHealth?.shopify?.connected ? 'text-green-600' : 'text-gray-500')
+                              : 'text-gray-500'
+                              }`}>
                               {!merchant?.shopifyAccessToken ? 'Not Configured' :
-                               integrationHealth?.shopify?.connected ? 'Connected' : 
-                               integrationHealth?.shopify?.status === 'not_configured' ? 'Not Configured' : 'Disconnected'}
+                                integrationHealth?.shopify?.connected ? 'Connected' :
+                                  integrationHealth?.shopify?.status === 'not_configured' ? 'Not Configured' : 'Disconnected'}
                             </p>
                           </div>
                         </div>
@@ -653,7 +672,7 @@ export default function MerchantDashboard() {
                           Store: {String(integrationHealth.shopify.details.shopName)}
                         </div>
                       ) : null}
-                      
+
                       {/* Show different content based on shopifyAccessToken */}
                       {merchant?.shopifyAccessToken ? (
                         <>
@@ -684,11 +703,10 @@ export default function MerchantDashboard() {
                                         setTimeout(() => setCopiedId(null), 2000);
                                       }
                                     }}
-                                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                                      copiedId === 'shopify-apikey'
-                                        ? 'bg-green-200 text-green-800'
-                                        : 'bg-green-100 hover:bg-green-200 text-green-700'
-                                    }`}
+                                    className={`px-2 py-1 text-xs rounded transition-colors ${copiedId === 'shopify-apikey'
+                                      ? 'bg-green-200 text-green-800'
+                                      : 'bg-green-100 hover:bg-green-200 text-green-700'
+                                      }`}
                                     title="Copy API Key"
                                   >
                                     {copiedId === 'shopify-apikey' ? 'Copied!' : 'Copy'}
@@ -711,11 +729,10 @@ export default function MerchantDashboard() {
                                       setCopiedId('shopify-webhook');
                                       setTimeout(() => setCopiedId(null), 2000);
                                     }}
-                                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                                      copiedId === 'shopify-webhook'
-                                        ? 'bg-green-200 text-green-800'
-                                        : 'bg-green-100 hover:bg-green-200 text-green-700'
-                                    }`}
+                                    className={`px-2 py-1 text-xs rounded transition-colors ${copiedId === 'shopify-webhook'
+                                      ? 'bg-green-200 text-green-800'
+                                      : 'bg-green-100 hover:bg-green-200 text-green-700'
+                                      }`}
                                     title="Copy Webhook URL"
                                   >
                                     {copiedId === 'shopify-webhook' ? 'Copied!' : 'Copy'}
@@ -727,7 +744,7 @@ export default function MerchantDashboard() {
                               </p>
                             </div>
                           </div>
-                          
+
                           {!integrationHealth?.shopify?.connected && (
                             <div className="mt-2">
                               <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
@@ -744,9 +761,9 @@ export default function MerchantDashboard() {
                                   <li>Configure with your Shopify credentials</li>
                                   <li>Use the webhook URL above with your API key parameter</li>
                                 </ol>
-                                <a 
-                                  href="https://github.com/rizwanmoulvi/cartee-dashboard" 
-                                  target="_blank" 
+                                <a
+                                  href="https://github.com/rizwanmoulvi/cartee-dashboard"
+                                  target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-block mt-2 text-yellow-800 hover:text-yellow-900 underline font-medium"
                                 >
@@ -784,19 +801,19 @@ export default function MerchantDashboard() {
                                 onClick={async () => {
                                   const tokenInput = document.getElementById('shopifyAccessToken') as HTMLInputElement;
                                   const domainInput = document.getElementById('shopifyShopDomain') as HTMLInputElement;
-                                  
+
                                   const token = tokenInput?.value.trim();
                                   const domain = domainInput?.value.trim();
-                                  
+
                                   if (!token || !domain) {
                                     alert('Please enter both Shopify Access Token and Shop Domain');
                                     return;
                                   }
-                                  
+
                                   try {
                                     const response = await fetch('/api/merchants/shopify', {
                                       method: 'POST',
-                                      headers: { 
+                                      headers: {
                                         'Content-Type': 'application/json',
                                         'X-API-Key': merchant?.apiKey || ''
                                       },
@@ -805,7 +822,7 @@ export default function MerchantDashboard() {
                                         shopifyShopDomain: domain
                                       })
                                     });
-                                    
+
                                     if (response.ok) {
                                       alert('Shopify configuration saved successfully!');
                                       // Refresh merchant data and integration health
@@ -825,7 +842,7 @@ export default function MerchantDashboard() {
                                 Save Shopify Configuration
                               </button>
                             </div>
-                            
+
                             {/* Webhook URL will be shown after saving */}
                             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-xs">
                               <p className="text-blue-800 mb-1">📌 After saving:</p>
@@ -843,44 +860,59 @@ export default function MerchantDashboard() {
                   {/* Show WooCommerce status only on WooCommerce page */}
                   {activeFilter === 'woocommerce' && (
                     <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-l-purple-500">
+                      {/* Header */}
                       <div className="flex items-start justify-between">
                         <div className="flex items-center space-x-3">
-                          <Store className={`w-6 h-6 ${
-                            merchant?.wooCommerceEnabled ? 'text-purple-600' : 'text-gray-400'
-                          }`} />
+                          <Store className={`w-6 h-6 ${merchant?.wooCommerceEnabled ? 'text-purple-600' : 'text-gray-400'}`} />
                           <div>
                             <h3 className="font-semibold text-gray-900">WooCommerce Integration</h3>
-                            <p className={`text-sm ${
-                              merchant?.wooCommerceEnabled ? 'text-purple-600' : 'text-gray-500'
-                            }`}>
-                              {merchant?.wooCommerceEnabled ? 'Connected' : 'Not Configured'}
+                            <p className={`text-sm font-medium ${merchant?.wooCommerceEnabled ? 'text-purple-600' : 'text-gray-500'}`}>
+                              {merchant?.wooCommerceEnabled ? '● Connected' : '○ Not Configured'}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center">
-                          {merchant?.wooCommerceEnabled ? (
-                            <CheckCircle className="w-5 h-5 text-purple-600" />
-                          ) : (
-                            <AlertCircle className="w-5 h-5 text-orange-500" />
-                          )}
-                        </div>
+                        {merchant?.wooCommerceEnabled ? (
+                          <CheckCircle className="w-5 h-5 text-purple-600" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5 text-orange-500" />
+                        )}
                       </div>
-                      {/* API Key Configuration Section */}
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Plugin Configuration</h4>
-                        <div className="space-y-2">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">API Key (for WooCommerce plugin):</p>
+
+                      {merchant?.wooCommerceEnabled ? (
+                        /* ── CONNECTED STATE ── */
+                        <div className="mt-4 space-y-4">
+                          {/* Store info banner */}
+                          <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                            <p className="text-xs font-semibold text-purple-800 mb-2">✅ Your WooCommerce store is connected and receiving orders</p>
+                            {merchant?.wooCommerceSiteURL && (
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs text-purple-600 font-medium">Store:</span>
+                                <a
+                                  href={merchant.wooCommerceSiteURL}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-purple-700 underline hover:text-purple-900 flex items-center space-x-1"
+                                >
+                                  <span>{merchant.wooCommerceSiteURL}</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* API Key section */}
+                          <div className="pt-3 border-t border-gray-100">
+                            <p className="text-xs font-semibold text-gray-600 mb-2">API Key</p>
                             <div className="flex items-center space-x-2">
                               <input
-                                type={showApiKey ? "text" : "password"}
+                                type={showApiKey ? 'text' : 'password'}
                                 readOnly
-                                value={merchant?.apiKey || 'Loading...'}
-                                className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded bg-gray-50 font-mono"
+                                value={merchant?.apiKey || ''}
+                                className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded bg-gray-50 font-mono"
                               />
                               <button
                                 onClick={() => setShowApiKey(!showApiKey)}
-                                className="text-xs px-2 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded transition-colors"
+                                className="text-xs px-2 py-1 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded transition-colors"
                               >
                                 {showApiKey ? 'Hide' : 'Show'}
                               </button>
@@ -892,62 +924,62 @@ export default function MerchantDashboard() {
                                     setTimeout(() => setCopiedId(null), 2000);
                                   }
                                 }}
-                                className={`text-xs px-2 py-1 rounded transition-colors ${
-                                  copiedId === 'apikey'
-                                    ? 'bg-green-100 text-green-700'
-                                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                }`}
+                                className={`text-xs px-2 py-1 rounded transition-colors ${copiedId === 'apikey' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
                               >
                                 {copiedId === 'apikey' ? 'Copied!' : 'Copy'}
                               </button>
                             </div>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            Use this API key in your WooCommerce plugin configuration to connect your store.
-                          </p>
-                          {merchant?.wooCommerceEnabled && merchant?.wooCommerceSiteURL && (
-                            <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded">
-                              <p className="text-xs font-medium text-green-800 mb-1">✓ WooCommerce Connected</p>
-                              <p className="text-xs text-green-700">
-                                Site URL: <a 
-                                  href={merchant.wooCommerceSiteURL} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="underline hover:text-green-800"
-                                >
-                                  {merchant.wooCommerceSiteURL}
-                                </a>
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {!merchant?.wooCommerceEnabled && (
-                        <div className="mt-2">
-                          <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-                            <p className="font-medium text-blue-800 mb-1">📦 Easy WooCommerce Integration</p>
-                            <p className="text-blue-700">
-                              Connect your WooCommerce store directly using the API key above.
+                            <p className="text-xs text-gray-400 mt-1">
+                              WooCommerce → Settings → Payments → MNEE Token Payment → API Key
                             </p>
-                            <div className="mt-2 space-y-1">
-                              <a 
-                                href="https://github.com/rizwanmoulvi/mnee-woocommerce-gateway" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="block text-blue-600 hover:text-blue-700 underline"
+                            <div className="mt-3">
+                              <button
+                                onClick={regenerateApiKey}
+                                disabled={regeneratingKey}
+                                className={`flex items-center space-x-1 text-xs px-3 py-1.5 rounded transition-colors ${regeneratingKey ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}
                               >
-                                📥 Download WooCommerce Plugin →
-                              </a>
-                              <a 
-                                href="https://cartee.rizzmo.site" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="block text-purple-600 hover:text-purple-700 underline"
-                              >
-                                🛍️ View WooCommerce Demo Store →
-                              </a>
+                                <RefreshCw className={`w-3 h-3 ${regeneratingKey ? 'animate-spin' : ''}`} />
+                                <span>{regeneratingKey ? 'Generating...' : 'Regenerate API Key'}</span>
+                              </button>
+                              <p className="text-xs text-gray-400 mt-1">⚠️ Regenerating invalidates the current key — update it in WooCommerce too.</p>
                             </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* ── NOT CONFIGURED STATE ── */
+                        <div className="mt-4">
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+                            <p className="font-semibold text-blue-800 mb-2">How to connect your WooCommerce store:</p>
+                            <ol className="list-decimal list-inside text-blue-700 space-y-1 mb-3">
+                              <li>Download and install the MNEE WooCommerce plugin</li>
+                              <li>Go to WooCommerce → Settings → Payments → MNEE Token Payment → Manage</li>
+                              <li>Paste your API key into the API Key field and save</li>
+                            </ol>
+                            <div className="flex items-center space-x-2 mb-2">
+                              <input
+                                type={showApiKey ? 'text' : 'password'}
+                                readOnly
+                                value={merchant?.apiKey || ''}
+                                className="flex-1 px-2 py-1 border border-blue-300 rounded bg-white font-mono"
+                              />
+                              <button onClick={() => setShowApiKey(!showApiKey)} className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                                {showApiKey ? 'Hide' : 'Show'}
+                              </button>
+                              <button
+                                onClick={() => { if (merchant?.apiKey) { navigator.clipboard.writeText(merchant.apiKey); setCopiedId('apikey'); setTimeout(() => setCopiedId(null), 2000); } }}
+                                className={`px-2 py-1 rounded transition-colors ${copiedId === 'apikey' ? 'bg-green-100 text-green-700' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+                              >
+                                {copiedId === 'apikey' ? 'Copied!' : 'Copy Key'}
+                              </button>
+                            </div>
+                            <a
+                              href="https://github.com/rizwanmoulvi/mnee-woocommerce-gateway"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block text-blue-600 hover:text-blue-800 underline font-medium"
+                            >
+                              📥 Download WooCommerce Plugin →
+                            </a>
                           </div>
                         </div>
                       )}
@@ -997,23 +1029,22 @@ export default function MerchantDashboard() {
             {/* Actions */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">
-                {activeFilter === 'all' ? 'All Invoices' : 
-                 activeFilter === 'direct' ? 'Direct Invoices' :
-                 activeFilter === 'shopify' ? 'Shopify Orders' :
-                 activeFilter === 'woocommerce' ? 'WooCommerce Orders' :
-                 activeFilter === 'pending' ? 'Pending Invoices' :
-                 activeFilter === 'paid' ? 'Paid Invoices' : 
-                 activeFilter === 'refunded' ? 'Refunded Invoices' : 'Invoices'}
+                {activeFilter === 'all' ? 'All Invoices' :
+                  activeFilter === 'direct' ? 'Direct Invoices' :
+                    activeFilter === 'shopify' ? 'Shopify Orders' :
+                      activeFilter === 'woocommerce' ? 'WooCommerce Orders' :
+                        activeFilter === 'pending' ? 'Pending Invoices' :
+                          activeFilter === 'paid' ? 'Paid Invoices' :
+                            activeFilter === 'refunded' ? 'Refunded Invoices' : 'Invoices'}
               </h2>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={refreshInvoices}
                   disabled={refreshing}
-                  className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    refreshing
-                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold transition-colors ${refreshing
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                   title="Refresh invoice list"
                 >
                   <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -1022,11 +1053,10 @@ export default function MerchantDashboard() {
                 <button
                   onClick={() => setShowCreateModal(true)}
                   disabled={activeFilter === 'shopify' || activeFilter === 'woocommerce'}
-                  className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    activeFilter === 'shopify' || activeFilter === 'woocommerce'
-                      ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
+                  className={`inline-flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold transition-colors ${activeFilter === 'shopify' || activeFilter === 'woocommerce'
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
                   title={
                     activeFilter === 'shopify' || activeFilter === 'woocommerce'
                       ? 'Invoices for this platform are created automatically via webhooks'
@@ -1042,100 +1072,99 @@ export default function MerchantDashboard() {
             {/* Invoices Table */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               {filteredInvoices.length === 0 ? (
-            <div className="text-center py-12">
-              <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No invoices yet</p>
-              <p className="text-sm text-gray-500 mt-2">Create your first invoice to get started</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Invoice ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Product
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredInvoices.map((invoice) => (
-                    <tr 
-                      key={invoice.id} 
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => openInvoiceDetails(invoice)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {invoice.id.slice(0, 8)}...
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {invoice.productName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {invoice.totalAmount} {invoice.currency}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
-                          {getStatusIcon(invoice.status)}
-                          <span>{invoice.status}</span>
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(invoice.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => copyPaymentLink(invoice.id)}
-                            className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium transition-colors ${
-                              copiedId === invoice.id
-                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                            }`}
-                            title="Copy payment link"
-                          >
-                            {copiedId === invoice.id ? (
-                              <>
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                <span>Copied!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3 h-3 mr-1" />
-                                <span>Copy</span>
-                              </>
-                            )}
-                          </button>
-                          <Link
-                            href={`/pay?orderId=${invoice.id}`}
-                            target="_blank"
-                            className="text-blue-600 hover:text-blue-700 transition-colors"
-                            title="Open payment page"
-                          >
-                            <ExternalLink className="w-5 h-5" />
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                <div className="text-center py-12">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No invoices yet</p>
+                  <p className="text-sm text-gray-500 mt-2">Create your first invoice to get started</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Invoice ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Product
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Created
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredInvoices.map((invoice) => (
+                        <tr
+                          key={invoice.id}
+                          className="hover:bg-gray-50 cursor-pointer"
+                          onClick={() => openInvoiceDetails(invoice)}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {invoice.id.slice(0, 8)}...
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {invoice.productName}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {invoice.totalAmount} {invoice.currency}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                              {getStatusIcon(invoice.status)}
+                              <span>{invoice.status}</span>
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(invoice.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => copyPaymentLink(invoice.id)}
+                                className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium transition-colors ${copiedId === invoice.id
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                  }`}
+                                title="Copy payment link"
+                              >
+                                {copiedId === invoice.id ? (
+                                  <>
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    <span>Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3 mr-1" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                              <Link
+                                href={`/pay?orderId=${invoice.id}`}
+                                target="_blank"
+                                className="text-blue-600 hover:text-blue-700 transition-colors"
+                                title="Open payment page"
+                              >
+                                <ExternalLink className="w-5 h-5" />
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1211,11 +1240,10 @@ export default function MerchantDashboard() {
                         value={formData.expiresInHours}
                         onChange={(e) => setFormData({ ...formData, expiresInHours: e.target.value })}
                         disabled={formData.type === 'SHOPIFY' || formData.type === 'WOOCOMMERCE'}
-                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          (formData.type === 'SHOPIFY' || formData.type === 'WOOCOMMERCE') 
-                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
-                            : ''
-                        }`}
+                        className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${(formData.type === 'SHOPIFY' || formData.type === 'WOOCOMMERCE')
+                          ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                          : ''
+                          }`}
                       >
                         <option value="1">1 Hour</option>
                         <option value="6">6 Hours</option>
@@ -1287,8 +1315,8 @@ export default function MerchantDashboard() {
                     <p><span className="font-medium">Product:</span> {formData.productName}</p>
                     <p><span className="font-medium">Amount:</span> {formData.totalAmount} {formData.currency}</p>
                     <p><span className="font-medium">Expires:</span> {
-                      (formData.type === 'SHOPIFY' || formData.type === 'WOOCOMMERCE') 
-                        ? 'Managed by platform' 
+                      (formData.type === 'SHOPIFY' || formData.type === 'WOOCOMMERCE')
+                        ? 'Managed by platform'
                         : (formData.expiresInHours === '0' ? 'Never' : `${formData.expiresInHours} hours`)
                     }</p>
                   </div>
@@ -1308,11 +1336,10 @@ export default function MerchantDashboard() {
                     <button
                       type="button"
                       onClick={() => copyInvoiceLink(createdInvoice.id)}
-                      className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-colors ${
-                        copiedId === createdInvoice.id
-                          ? 'bg-green-600 text-white hover:bg-green-700'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
+                      className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-colors ${copiedId === createdInvoice.id
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
                       title="Copy link"
                     >
                       {copiedId === createdInvoice.id ? (
@@ -1437,11 +1464,10 @@ export default function MerchantDashboard() {
                       <p className="text-xs text-gray-500">
                         {new Date(selectedInvoice.expiresAt) > new Date() ? 'Expires' : 'Expired'}
                       </p>
-                      <p className={`text-sm font-medium ${
-                        new Date(selectedInvoice.expiresAt) > new Date() 
-                          ? 'text-gray-900' 
-                          : 'text-red-600'
-                      }`}>
+                      <p className={`text-sm font-medium ${new Date(selectedInvoice.expiresAt) > new Date()
+                        ? 'text-gray-900'
+                        : 'text-red-600'
+                        }`}>
                         {new Date(selectedInvoice.expiresAt).toLocaleString()}
                         {new Date(selectedInvoice.expiresAt) < new Date() && ' ⚠️'}
                       </p>
@@ -1481,22 +1507,22 @@ export default function MerchantDashboard() {
 
                             if (window.confirm('Are you sure you want to refund this payment? This will send funds back to the customer\'s wallet.')) {
                               setIsProcessingRefund(true);
-                              
+
                               try {
                                 // Calculate refund amount in token units (assuming 18 decimals for KRW token)
                                 const refundAmount = parseUnits(selectedInvoice.totalAmount.toString(), 18);
-                                
+
                                 // Check merchant has sufficient balance
                                 if (krwBalance && krwBalance.value < refundAmount) {
                                   alert('Insufficient KRW balance to process refund');
                                   setIsProcessingRefund(false);
                                   return;
                                 }
-                                
+
                                 // Determine which token to refund (KRW or native KAIA)
-                                const isKRWPayment = selectedInvoice.currency === 'KRW' || 
-                                                     selectedInvoice.tokenAddress === KRW_TOKEN_ADDRESS;
-                                
+                                const isKRWPayment = selectedInvoice.currency === 'KRW' ||
+                                  selectedInvoice.tokenAddress === KRW_TOKEN_ADDRESS;
+
                                 if (isKRWPayment) {
                                   // Refund KRW tokens
                                   writeRefund({
@@ -1518,11 +1544,10 @@ export default function MerchantDashboard() {
                             }
                           }}
                           disabled={isProcessingRefund || isRefunding || isRefundConfirming}
-                          className={`inline-flex items-center text-xs px-2 py-1 rounded transition-colors ${
-                            isProcessingRefund || isRefunding || isRefundConfirming
-                              ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                              : 'bg-red-100 text-red-700 hover:bg-red-200'
-                          }`}
+                          className={`inline-flex items-center text-xs px-2 py-1 rounded transition-colors ${isProcessingRefund || isRefunding || isRefundConfirming
+                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                            : 'bg-red-100 text-red-700 hover:bg-red-200'
+                            }`}
                         >
                           {isProcessingRefund || isRefunding || isRefundConfirming ? 'Processing...' : 'Refund'}
                         </button>
@@ -1600,11 +1625,10 @@ export default function MerchantDashboard() {
                 />
                 <button
                   onClick={() => copyPaymentLink(selectedInvoice.id)}
-                  className={`px-3 py-2 rounded transition-colors ${
-                    copiedId === selectedInvoice.id
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                  }`}
+                  className={`px-3 py-2 rounded transition-colors ${copiedId === selectedInvoice.id
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    }`}
                 >
                   {copiedId === selectedInvoice.id ? 'Copied!' : 'Copy'}
                 </button>
@@ -1626,11 +1650,10 @@ export default function MerchantDashboard() {
                   onClick={() => {
                     copyPaymentLink(selectedInvoice.id);
                   }}
-                  className={`flex-1 inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    copiedId === selectedInvoice.id
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`flex-1 inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold transition-colors ${copiedId === selectedInvoice.id
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   <Copy className="w-4 h-4 mr-2" />
                   {copiedId === selectedInvoice.id ? 'Link Copied!' : 'Copy Payment Link'}
