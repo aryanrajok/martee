@@ -12,7 +12,7 @@ model Merchant {
   walletAddress         String   @unique
   name                  String   @default("Unnamed Merchant")
   email                 String?
-  apiKey                String   @unique @db.Char(16)
+  apiKey                String   @unique @db.VarChar(100)
   wooCommerceEnabled    Boolean  @default(false)
   wooCommerceSiteURL    String?
   shopifyAccessToken    String?
