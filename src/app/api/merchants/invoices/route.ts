@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   try {
     // Check for API key authentication
     const apiKey = request.headers.get('x-api-key');
-    
+
     const body = await request.json();
     const {
       productName,
@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!productName || !totalAmount) {
-      return NextResponse.json({ 
-        error: 'Product name and amount are required' 
+      return NextResponse.json({
+        error: 'Product name and amount are required'
       }, { status: 400 });
     }
 
@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Merchant not found. Please refresh the dashboard.' }, { status: 404 });
       }
     } else {
-      return NextResponse.json({ 
-        error: 'Either API key (via X-API-Key header) or merchantWallet is required' 
+      return NextResponse.json({
+        error: 'Either API key (via X-API-Key header) or merchantWallet is required'
       }, { status: 400 });
     }
 
@@ -89,7 +89,12 @@ export async function POST(request: NextRequest) {
       expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + parseInt(expiresInHours.toString()));
     }
-    
+
+    // Ensure merchant exists (this should never happen due to above checks, but TypeScript needs it)
+    if (!merchant) {
+      return NextResponse.json({ error: 'Unable to identify merchant' }, { status: 400 });
+    }
+
     // Create the invoice/order
     const invoice = await prisma.order.create({
       data: {
@@ -112,6 +117,11 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating invoice:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error details:', errorMessage);
+    return NextResponse.json({
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    }, { status: 500 });
   }
 }
