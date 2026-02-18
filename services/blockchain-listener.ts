@@ -5,13 +5,14 @@ import { dirname } from 'path';
 
 const prisma = new PrismaClient();
 
-// MNEE Token Configuration
-// Production: 0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF (Ethereum Mainnet)
-// Testing: 0x21dbe1B2FA0068628df10799824eF366A0985416 (Sepolia Testnet - tMNEE)
-const MNEE_TOKEN_ADDRESS = process.env.MNEE_TOKEN_ADDRESS || '0x21dbe1B2FA0068628df10799824eF366A0985416';
-const ETHEREUM_RPC_WSS = process.env.ETHEREUM_RPC_WSS || 'wss://eth-sepolia.g.alchemy.com/v2/j3uFy79ofZuSWUq1DNeTBKon5SQhbjh2';
-const MIN_CONFIRMATIONS = parseInt(process.env.MIN_CONFIRMATIONS || '1');
-const NETWORK_NAME = process.env.NETWORK_NAME || 'sepolia';
+// Payment Token Configuration
+// BNB Testnet: You need to deploy TestBNBToken.sol and update the address here
+// Default is placeholder - update after deploying your token
+const MNEE_TOKEN_ADDRESS = process.env.MNEE_TOKEN_ADDRESS || '0x0000000000000000000000000000000000000000';
+const ETHEREUM_RPC_WSS = process.env.ETHEREUM_RPC_WSS || 'wss://bsc-testnet.publicnode.com';
+const ETHEREUM_RPC_HTTP = process.env.ETHEREUM_RPC_HTTP || 'https://data-seed-prebsc-1-s1.binance.org:8545';
+const MIN_CONFIRMATIONS = parseInt(process.env.MIN_CONFIRMATIONS || '3');
+const NETWORK_NAME = process.env.NETWORK_NAME || 'bsc-testnet';
 
 // ERC-20 ABI for Transfer event
 const ERC20_ABI = [
@@ -30,14 +31,14 @@ interface PaymentNotificationResult {
  * Notify WooCommerce that payment has been confirmed
  */
 async function notifyWooCommercePayment(
-  orderKey: string, 
-  transactionId: string, 
-  apiKey: string, 
+  orderKey: string,
+  transactionId: string,
+  apiKey: string,
   siteUrl: string
 ): Promise<PaymentNotificationResult> {
   try {
     console.log(`[WooCommerce] Notifying payment for order ${orderKey}`);
-    
+
     const response = await fetch(`${siteUrl}/wp-admin/admin-ajax.php?action=MNEE_payment_confirm`, {
       method: 'POST',
       headers: {
@@ -53,13 +54,13 @@ async function notifyWooCommercePayment(
 
     const result = await response.json();
     console.log('[WooCommerce] Notification result:', result);
-    
+
     return { success: result.success || false };
   } catch (error) {
     console.error('[WooCommerce] Failed to notify:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
@@ -74,7 +75,7 @@ async function markShopifyOrderAsPaid(
 ): Promise<PaymentNotificationResult> {
   try {
     console.log(`[Shopify] Marking order ${adminGraphqlApiId} as paid`);
-    
+
     const mutation = `
       mutation orderMarkAsPaid($input: OrderMarkAsPaidInput!) {
         orderMarkAsPaid(input: $input) {
@@ -106,12 +107,12 @@ async function markShopifyOrderAsPaid(
     });
 
     const result = await response.json();
-    
+
     if (result.data?.orderMarkAsPaid?.userErrors?.length > 0) {
       console.error('[Shopify] GraphQL errors:', result.data.orderMarkAsPaid.userErrors);
-      return { 
-        success: false, 
-        error: result.data.orderMarkAsPaid.userErrors[0].message 
+      return {
+        success: false,
+        error: result.data.orderMarkAsPaid.userErrors[0].message
       };
     }
 
@@ -119,9 +120,9 @@ async function markShopifyOrderAsPaid(
     return { success: true };
   } catch (error) {
     console.error('[Shopify] Failed to mark order as paid:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
@@ -214,7 +215,7 @@ async function matchTransferToOrder(
 ): Promise<string | null> {
   try {
     const amountInEther = parseFloat(amount);
-    
+
     // Find pending order matching merchant wallet and amount
     // We use a tolerance of 0.01% to account for any precision issues
     const order = await prisma.order.findFirst({
@@ -249,12 +250,13 @@ async function matchTransferToOrder(
  */
 export async function startBlockchainListener() {
   console.log('='.repeat(80));
-  console.log('🚀 Starting MNEE Blockchain Listener Service');
+  console.log('🚀 Starting Blockchain Payment Listener Service');
   console.log('='.repeat(80));
   console.log(`Network: ${NETWORK_NAME}`);
   console.log(`Token: ${MNEE_TOKEN_ADDRESS}`);
   console.log(`Min Confirmations: ${MIN_CONFIRMATIONS}`);
-  console.log(`RPC: ${ETHEREUM_RPC_WSS.replace(/\/[^/]+$/, '/***')}`);
+  console.log(`RPC WSS: ${ETHEREUM_RPC_WSS}`);
+  console.log(`RPC HTTP: ${ETHEREUM_RPC_HTTP}`);
   console.log('='.repeat(80));
 
   let provider: ethers.WebSocketProvider;
@@ -265,7 +267,7 @@ export async function startBlockchainListener() {
     try {
       // Create WebSocket provider
       provider = new ethers.WebSocketProvider(ETHEREUM_RPC_WSS);
-      
+
       // Test connection
       const network = await provider.getNetwork();
       console.log(`✅ Connected to network: ${network.name} (chainId: ${network.chainId})`);
@@ -315,7 +317,7 @@ export async function startBlockchainListener() {
               await processConfirmedPayment(orderId, txHash, from, amount, blockNumber);
             } else {
               console.log(`⏳ Only ${confirmations}/${MIN_CONFIRMATIONS} confirmations, waiting...`);
-              
+
               // Set up a listener for additional confirmations
               let confirmedBlock = blockNumber + MIN_CONFIRMATIONS;
               const confirmationListener = async (newBlockNumber: number) => {
@@ -325,13 +327,13 @@ export async function startBlockchainListener() {
                   provider.off('block', confirmationListener);
                 }
               };
-              
+
               provider.on('block', confirmationListener);
             }
           } else {
             console.log('ℹ️  No matching order found (might be a different payment)');
           }
-          
+
           console.log('='.repeat(80) + '\n');
         } catch (error) {
           console.error('❌ Error processing Transfer event:', error);
@@ -355,7 +357,7 @@ export async function startBlockchainListener() {
         }
       }, 30000); // Check every 30 seconds
 
-      console.log('✅ Listener active - monitoring for MNEE transfers...\n');
+      console.log('✅ Listener active - monitoring for token transfers on BNB Testnet...\n');
     } catch (error) {
       console.error('❌ Failed to setup connection:', error);
       reconnect();
@@ -367,7 +369,7 @@ export async function startBlockchainListener() {
     isReconnecting = true;
 
     console.log('🔄 Reconnecting in 5 seconds...');
-    
+
     // Clean up existing connection
     try {
       if (tokenContract) {
