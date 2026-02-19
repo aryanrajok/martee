@@ -1,28 +1,150 @@
 # Cartee
 
-A cryptocurrency payment gateway for WooCommerce and Shopify that accepts MNEE stablecoin on Ethereum Sepolia testnet.
+> **Non-custodial crypto payment gateway for WooCommerce & Shopify — with AI fraud detection and merchant analytics, powered by BNB Smart Chain.**
 
-Built with Next.js, Prisma, and RainbowKit. Currently running on testnet - **do not use with real money**.
+Cartee lets merchants accept BEP-20 token payments on their existing stores without writing a single line of code. Customers connect their wallet, approve the transfer, and the order is automatically marked as paid — no middleman, no API keys holding funds.
 
-## Live Demo
+Built with Next.js 15, Prisma, RainbowKit, and Ethers.js. Currently running on **BNB Testnet** — do not use with real money.
 
-- Dashboard: https://cartee-dashboard.vercel.app
-- Test Store: https://limegreen-parrot-662804.hostingersite.com (WooCommerce)
+---
 
-## What it does
+## 🔗 Live Links
 
-Lets merchants accept MNEE token payments on their WooCommerce or Shopify stores. Customers connect their wallet, approve/send tokens, and the order gets marked as paid automatically.
+| | |
+|---|---|
+| **Dashboard** | https://cartee-dashboard.vercel.app |
+| **Test Store** | https://limegreen-parrot-662804.hostingersite.com (WooCommerce) |
+| **Token Contract (BSC Testnet)** | [`0xA22985Ce784dfe6298EAB97946eE9d5d5796419a`](https://testnet.bscscan.com/address/0xA22985Ce784dfe6298EAB97946eE9d5d5796419a) |
+| **Token Faucet** | https://cartee-dashboard.vercel.app/faucet |
 
-The blockchain listener watches for transfers and updates order status in real-time. No middleman, no API keys to manage customer funds.
+---
 
-## Setup
+## 🧩 What It Does
+
+### For Merchants
+1. Go to the dashboard and connect your wallet
+2. Copy your API key
+3. Install the WooCommerce plugin **or** configure the Shopify webhook
+4. Paste your API key in the plugin/webhook settings
+5. Done — your store now accepts `tBNBP` crypto payments
+
+### For Customers
+1. Add items to cart and proceed to checkout
+2. Select **"Crypto Token Payment"**
+3. Connect wallet (MetaMask, WalletConnect, etc.)
+4. Approve token transfer on BNB Testnet
+5. Order is confirmed automatically — no page refresh needed
+
+---
+
+## 🤖 AI Features
+
+### Fraud Detection
+Every transaction is automatically scored for risk on a scale of 0–100:
+
+| Score | Level | Action |
+|---|---|---|
+| 0–20 | 🟢 LOW | Safe to fulfil |
+| 21–45 | 🟡 MEDIUM | Manual review recommended |
+| 46–70 | 🔴 HIGH | Hold order |
+| 71–100 | ⛔ CRITICAL | Block & flag |
+
+Signals analysed: wallet age, transaction frequency, amount anomalies, repeat customer patterns.
+
+Merchants can also run a **Live Fraud Check** — enter any wallet address + amount and get an instant AI risk score before processing.
+
+### Analytics & Predictions
+- 14-day revenue trend chart
+- 4-day AI revenue forecast
+- KPIs: total revenue, conversion rate, avg order value, unique & repeat customers
+- Revenue breakdown by channel (Direct / WooCommerce / Shopify)
+- Top products by revenue
+- Peak payment hour detection
+- Actionable AI insights (e.g. drop-off warnings, growth signals)
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Customer Browser                      │
+│   WooCommerce / Shopify Checkout → Cartee Pay Page      │
+│   RainbowKit Wallet Connect → BNB Testnet Transfer      │
+└───────────────────────┬─────────────────────────────────┘
+                        │ on-chain token transfer
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│              Blockchain Listener (Ethers.js)             │
+│   Watches tBNBP Transfer events via BSC Testnet WSS     │
+│   Matches tx → invoice → updates order status           │
+└───────────────────────┬─────────────────────────────────┘
+                        │ POST /api/orders/update-status
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│              Next.js Backend (Vercel)                   │
+│   API routes, Prisma ORM, PostgreSQL                    │
+│   AI fraud scoring, analytics, revenue prediction       │
+└───────────────────────┬─────────────────────────────────┘
+                        │ webhook / REST API
+                        ▼
+┌──────────────────────────────────────────┐
+│   WooCommerce Plugin  │  Shopify Webhook │
+│   (marks order PAID)  │  (marks paid)   │
+└──────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15 (App Router), Tailwind CSS |
+| Wallet | RainbowKit, wagmi, viem |
+| Blockchain | Ethers.js, BNB Smart Chain Testnet (Chain ID: 97) |
+| Smart Contract | BEP-20 token (Solidity, deployed via Hardhat) |
+| Backend | Next.js API Routes |
+| Database | Prisma ORM + PostgreSQL (Docker / Supabase) |
+| WooCommerce | Custom PHP payment gateway plugin |
+| Shopify | Webhook-based integration |
+| Infra | Vercel (frontend), Railway (blockchain listener) |
+
+---
+
+## 🪙 Token Contract
+
+**TestBNBToken (`tBNBP`)** — deployed on BNB Smart Chain Testnet
+
+| | |
+|---|---|
+| **Address** | `0xA22985Ce784dfe6298EAB97946eE9d5d5796419a` |
+| **Symbol** | `tBNBP` |
+| **Decimals** | 18 |
+| **Network** | BNB Testnet (Chain ID: 97) |
+| **BSCScan** | https://testnet.bscscan.com/address/0xA22985Ce784dfe6298EAB97946eE9d5d5796419a |
+
+**Features:**
+- Public minting: 1,000,000 tokens per mint (1 hour cooldown per address)
+- Owner mint: no limit (for testing)
+- Standard BEP-20 (transfer, approve, allowance)
+
+Source: `/contracts/TestBNBToken.sol`
+
+### Get Test Tokens
+1. Get test BNB from the [BNB Faucet](https://testnet.bnbchain.org/faucet-smart)
+2. Visit https://cartee-dashboard.vercel.app/faucet
+3. Connect wallet, click **Mint Tokens** → receive 1,000,000 tBNBP
+
+---
+
+## ⚙️ Setup
 
 ### Prerequisites
-
 - Node.js 18+
-- PostgreSQL database (or use Supabase)
-- Ethereum wallet with Sepolia ETH
-- WooCommerce or Shopify store (optional)
+- PostgreSQL (or Supabase / Docker)
+- MetaMask wallet on BNB Smart Chain Testnet
+- Test BNB for gas
 
 ### Installation
 
@@ -34,26 +156,31 @@ npm install
 
 ### Environment Variables
 
-Copy `.env.example` to `.env` and fill in:
-
 ```env
 # Database
 DATABASE_URL="postgresql://..."
 
-# MNEE Token (Sepolia testnet)
-MNEE_TOKEN_ADDRESS="0x49F65A3C616Cd9B83DE5615D39e01B49bE14b643"
-NEXT_PUBLIC_MNEE_TOKEN_ADDRESS="0x49F65A3C616Cd9B83DE5615D39e01B49bE14b643"
+# BNB Testnet Token
+MNEE_TOKEN_ADDRESS="0xA22985Ce784dfe6298EAB97946eE9d5d5796419a"
+NEXT_PUBLIC_MNEE_TOKEN_ADDRESS="0xA22985Ce784dfe6298EAB97946eE9d5d5796419a"
 
-# Ethereum RPC
-ETHEREUM_RPC_WSS="wss://eth-sepolia.g.alchemy.com/v2/YOUR_KEY"
-NEXT_PUBLIC_ALCHEMY_ID="YOUR_KEY"
+# BNB Testnet RPC
+ETHEREUM_RPC_WSS="wss://bsc-testnet.publicnode.com"
+ETHEREUM_RPC_HTTP="https://data-seed-prebsc-1-s1.binance.org:8545"
+NEXT_PUBLIC_RPC_URL="https://data-seed-prebsc-1-s1.binance.org:8545"
+
+# Network
+NETWORK_NAME="bsc-testnet"
+CHAIN_ID="97"
+MIN_CONFIRMATIONS="3"
 
 # WalletConnect
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="your_project_id"
 
-# Network
-NETWORK_NAME="sepolia"
-MIN_CONFIRMATIONS="1"
+# WooCommerce (optional)
+WOOCOMMERCE_CONSUMER_KEY="ck_..."
+WOOCOMMERCE_CONSUMER_SECRET="cs_..."
+WOOCOMMERCE_URL="https://your-store.com"
 ```
 
 ### Database Setup
@@ -67,60 +194,40 @@ npx prisma db push
 
 ```bash
 npm run dev
+# Open http://localhost:3000
 ```
 
-Open http://localhost:3000
+---
 
-## Usage
+## 🛒 WooCommerce Plugin
 
-### For Merchants
+Install in 3 steps:
+1. Download `mnee-woocommerce-gateway-v6-fixed.zip` from `/woocommerce-plugin`
+2. Upload via **WordPress → Plugins → Add New → Upload Plugin**
+3. Activate, then go to **WooCommerce → Settings → Payments → Crypto Token**
+4. Enter your Cartee API key and click **Save**
 
-1. Go to dashboard and connect your wallet
-2. Copy your API key
-3. Install the WooCommerce plugin OR configure Shopify webhook
-4. Add API key to plugin/webhook settings
-5. Done - you can now accept MNEE payments
+---
 
-### For Customers
+## 🛍️ Shopify Integration
 
-1. Add items to cart
-2. Choose "MNEE Token Payment" at checkout
-3. Connect wallet and approve transaction
-4. Payment confirmed automatically
+Shopify doesn't support custom payment plugins, so Cartee uses webhooks:
 
-## WooCommerce Plugin
-
-The plugin is in `/krw-woocommerce-gateway-plugin`. 
-
-**Install:**
-1. Download `mnee-woocommerce-gateway-v6-fixed.zip`
-2. Upload to WordPress via Plugins → Add New → Upload
-3. Activate plugin
-4. Go to WooCommerce → Settings → Payments → MNEE Token
-5. Enter your API key and click "Save"
-6. Click "Connect" to verify
-
-## Shopify Integration
-
-Shopify doesn't support custom payment plugins, so we use webhooks + manual payment method.
-
-**Setup:**
-1. Create custom app in Shopify Dev Dashboard
-2. Add `read_orders` and `write_orders` scopes
-3. Get access token
-4. Configure in Cartee dashboard (Shopify tab)
+1. Create a custom app in the Shopify Dev Dashboard
+2. Grant `read_orders` and `write_orders` scopes
+3. Get your access token
+4. Go to **Cartee Dashboard → Shopify tab** and enter store details
 5. Register webhook: `https://cartee-dashboard.vercel.app/api/webhooks/shopify?apiKey=YOUR_KEY`
-6. Add "MNEE Token Payment" as manual payment method in Shopify
+6. Add **"Crypto Token Payment"** as a manual payment method in Shopify
 
-Check `register-shopify-webhook.js` for automated webhook registration.
+---
 
-## Blockchain Listener
+## 🔗 Blockchain Listener
 
-Monitors the blockchain for MNEE transfers and updates order status.
+Monitors BNB Testnet for `tBNBP` token transfers and auto-updates order status.
 
 **Run locally:**
 ```bash
-npm install -D ts-node ethers
 npx ts-node services/blockchain-listener.ts
 ```
 
@@ -130,73 +237,65 @@ railway init
 railway up
 ```
 
-Add same env variables as above.
+Use the same `.env` variables as above.
 
-## Tech Stack
+---
 
-- Next.js 15 (App Router)
-- Prisma (PostgreSQL)
-- RainbowKit + wagmi + viem
-- Tailwind CSS
-- Ethers.js (blockchain listener)
+## 📡 API Endpoints
 
-## Token Contract
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/merchants/auth` | POST | Create or retrieve merchant account |
+| `/api/merchants/invoices` | POST | Create a payment invoice |
+| `/api/orders/update-status` | POST | Update order status after payment |
+| `/api/webhooks/woocommerce` | POST | Receive WooCommerce order events |
+| `/api/webhooks/shopify` | POST | Receive Shopify order events |
+| `/api/ai/analytics` | GET | Merchant analytics + AI predictions |
+| `/api/ai/fraud-score` | GET/POST | Fraud risk scoring for orders/wallets |
 
-TestMNEE is deployed on Sepolia at `0x49F65A3C616Cd9B83DE5615D39e01B49bE14b643`
-Using this instead of actual MNEE token (`0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF`) on ethereum becuase we don't have funds to buy actual token and test
+---
 
-Source: `/contracts/TestMNEE.sol`
-
-Features:
-- Public minting (1M tokens per hour cooldown)
-- ERC20 standard
-- Testnet only
-
-## Get Test Tokens
-
-Use the faucet at https://cartee-dashboard.vercel.app/faucet
-
-You'll need Sepolia ETH first:
-- https://www.alchemy.com/faucets/ethereum-sepolia
-- https://sepoliafaucet.com
-
-## Project Structure
+## 📁 Project Structure
 
 ```
-├── src/app/              # Next.js app router
+├── src/app/
 │   ├── dashboard/        # Merchant dashboard
-│   ├── pay/             # Payment page
-│   ├── faucet/          # Token faucet
-│   └── api/             # API routes
-├── services/            # Blockchain listener
-├── prisma/              # Database schema
-└── krw-woocommerce-gateway-plugin/  # WooCommerce plugin
+│   ├── pay/              # Customer payment page
+│   ├── faucet/           # Test token faucet
+│   ├── ai/               # AI analytics & fraud detection UI
+│   └── api/              # All API routes
+├── services/
+│   └── blockchain-listener.ts   # On-chain event watcher
+├── contracts/
+│   └── TestBNBToken.sol          # BEP-20 test token
+├── prisma/               # Database schema & migrations
+└── woocommerce-plugin/   # PHP WooCommerce gateway plugin
 ```
 
-## API Endpoints
+---
 
-- `POST /api/merchants/auth` - Create/get merchant account
-- `POST /api/merchants/invoices` - Create payment invoice
-- `POST /api/orders/update-status` - Update order status
-- `POST /api/webhooks/woocommerce` - WooCommerce order webhook
-- `POST /api/webhooks/shopify` - Shopify order webhook
+## ⚠️ Known Limitations
 
-## Known Issues
+- Blockchain listener must run as a separate process (not on Vercel serverless)
+- Shopify doesn't auto-show the payment link — requires order status page customisation
+- Public RPC nodes may rate-limit under heavy load — use Alchemy/QuickNode in production
+- Testnet only — **do not use with real funds**
 
-- Alchemy rate limits sometimes cause approve() to fail - wait 30s and retry
-- Blockchain listener must run separately (not on Vercel)
-- Shopify doesn't show payment link automatically (need order status page customization)
+---
 
-## Contributing
+## 🤝 Contributing
 
-PRs welcome. This is a testnet project so feel free to experiment.
+PRs welcome. This is a testnet/hackathon project — feel free to experiment.
 
-## License
+---
+
+## 📄 License
 
 MIT
 
+---
 
-## Contact
+## 👤 Contact
 
 Built by [@rizwanmoulvi](https://github.com/rizwanmoulvi)
 
