@@ -54,7 +54,7 @@ export default function Home() {
               <ArrowRight className="w-4 h-4" />
             </Link>
             <a
-              href="https://github.com/rizwanmoulvi/cartee-dashboard"
+              href="https://github.com/aryanrajok/cartee"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center space-x-2 bg-white text-gray-900 px-6 py-3 rounded-xl font-semibold border border-gray-200 hover:bg-gray-50 transition-colors"
