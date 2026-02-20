@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 console.log('Invoices route loaded - Prisma client created:', !!prisma, typeof prisma);
@@ -69,13 +70,21 @@ export async function POST(request: NextRequest) {
       // Use the merchant's wallet address from the API key lookup
       merchantWallet = merchant.walletAddress;
     } else if (merchantWallet) {
-      // Fallback to wallet address lookup (for dashboard usage)
+      // Fallback to wallet address lookup (for dashboard / extension usage)
       merchant = await prisma.merchant.findUnique({
         where: { walletAddress: merchantWallet.toLowerCase() }
       });
 
       if (!merchant) {
-        return NextResponse.json({ error: 'Merchant not found. Please refresh the dashboard.' }, { status: 404 });
+        // Auto-register the merchant (same as /api/merchants/auth)
+        const apiKey = crypto.randomBytes(8).toString('hex');
+        merchant = await prisma.merchant.create({
+          data: {
+            walletAddress: merchantWallet.toLowerCase(),
+            name: `Merchant ${merchantWallet.slice(0, 6)}...${merchantWallet.slice(-4)}`,
+            apiKey: apiKey
+          }
+        });
       }
     } else {
       return NextResponse.json({

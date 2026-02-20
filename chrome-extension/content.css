@@ -1,0 +1,8 @@
+/* content.css — minimal resets so injected elements aren't affected by host page styles */
+#cartee-pay-btn-injected * {
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: normal;
+    text-decoration: none;
+    list-style: none;
+}

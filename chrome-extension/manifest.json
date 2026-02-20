@@ -1,0 +1,48 @@
+{
+    "manifest_version": 3,
+    "name": "Cartee – Crypto Checkout",
+    "version": "1.0.0",
+    "description": "Pay with BNB tokens on any WooCommerce or Shopify store powered by Cartee. One-click crypto checkout.",
+    "permissions": [
+        "activeTab",
+        "storage",
+        "notifications"
+    ],
+    "host_permissions": [
+        "https://cartee-dashboard.vercel.app/*",
+        "http://localhost:3000/*"
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icons/icon16.png",
+            "32": "icons/icon32.png",
+            "48": "icons/icon48.png",
+            "128": "icons/icon128.png"
+        },
+        "default_title": "Cartee – Crypto Checkout"
+    },
+    "icons": {
+        "16": "icons/icon16.png",
+        "32": "icons/icon32.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "css": [
+                "content.css"
+            ],
+            "run_at": "document_idle"
+        }
+    ],
+    "background": {
+        "service_worker": "background.js"
+    }
+}
